@@ -1,0 +1,1392 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#689D4B">
+<meta name="description" content="Sổ Chi Tiêu — Quản lý thu chi, ví tiền, ngân sách và công nợ cá nhân.">
+<title>Hôm nay bạn còn tiền không?</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css?v=19">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js" data-fallback-for="fontawesome"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js" data-fallback-for="exceljs"></script>
+<script>
+/* =====================================================
+   TỰ ĐỘNG DỰ PHÒNG CDN (Font Awesome / ExcelJS)
+   Một số mạng / firewall chỉ chặn MỘT CDN cụ thể. Nếu thẻ script phía trên
+   tải lỗi (onerror), đoạn code này sẽ tự động thử tải lại từ CDN khác.
+===================================================== */
+(function(){
+  function loadScript(url){
+    return new Promise(function(resolve, reject){
+      var s = document.createElement('script');
+      s.src = url;
+      s.async = false;
+      s.onload = function(){ resolve(url); };
+      s.onerror = function(){ reject(url); };
+      document.head.appendChild(s);
+    });
+  }
+  function loadWithFallback(urls, label){
+    var i = 0;
+    function attempt(){
+      if(i >= urls.length){
+        console.error('[Sổ Chi Tiêu] KHÔNG thể tải "' + label + '" từ bất kỳ CDN dự phòng nào.');
+        return Promise.reject();
+      }
+      var url = urls[i++];
+      return loadScript(url).catch(attempt);
+    }
+    return attempt();
+  }
+  var FALLBACKS = {
+    fontawesome: ['https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/js/all.min.js'],
+    exceljs:     ['https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'],
+  };
+  document.addEventListener('error', function(e){
+    var el = e.target;
+    if(!el || el.tagName !== 'SCRIPT') return;
+    var key = el.getAttribute && el.getAttribute('data-fallback-for');
+    if(!key || !FALLBACKS[key]) return;
+    console.warn('[Sổ Chi Tiêu] Không tải được "' + key + '" từ ' + el.src + ' — đang thử CDN dự phòng...');
+    loadWithFallback(FALLBACKS[key], key);
+  }, true);
+})();
+</script>
+</head>
+<body>
+
+<!-- ================= LOADING OVERLAY (toàn màn hình) ================= -->
+<div class="loading-overlay" id="globalLoading">
+  <div class="loading-box">
+    <div class="spinner"></div>
+    <div class="loading-text" id="globalLoadingText">Đang tải dữ liệu...</div>
+  </div>
+</div>
+
+<!-- ================= AUTH SCREEN ================= -->
+<div id="authScreen" class="hidden">
+  <div class="auth-wrap">
+    <div class="auth-side">
+      <div class="brand"><span class="brand-mark"><i class="fa-solid fa-wallet"></i></span> Sổ Chi Tiêu</div>
+      <div>
+        <h2>Kiểm soát dòng tiền của bạn mỗi ngày.</h2>
+        <p>Quản lý đa ví, theo dõi ngân sách, phân tích xu hướng chi tiêu và nhắc lịch hóa đơn — tất cả được đồng bộ an toàn trên đám mây.</p>
+        <div class="auth-mini-stats">
+          <div><span class="num"><i class="fa-solid fa-cloud"></i></span><span class="lbl">Đồng bộ đa thiết bị</span></div>
+          <div><span class="num"><i class="fa-solid fa-lock"></i></span><span class="lbl">Dữ liệu riêng tư</span></div>
+          <div><span class="num">100%</span><span class="lbl">Miễn phí</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="auth-form-side">
+      <div class="auth-toggle">
+        <button type="button" id="tabLogin" class="active" data-auth-tab="login">Đăng nhập</button>
+        <button type="button" id="tabRegister" data-auth-tab="register">Tạo tài khoản</button>
+      </div>
+
+      <!-- ---- FORM ĐĂNG NHẬP ---- -->
+      <form class="auth-form" id="loginForm" novalidate>
+        <h3>Chào mừng trở lại</h3>
+        <div class="sub">Đăng nhập để tiếp tục quản lý chi tiêu.</div>
+        <div class="field">
+          <label for="loginEmailInput">Email</label>
+          <input type="email" id="loginEmailInput" placeholder="vd: ban@email.com" autocomplete="email" required>
+        </div>
+        <div class="field">
+          <label for="loginPasswordInput">Mật khẩu</label>
+          <div class="password-wrap">
+            <input type="password" id="loginPasswordInput" placeholder="Nhập mật khẩu" autocomplete="current-password" required>
+            <button type="button" class="pw-toggle" data-pw-target="loginPasswordInput" aria-label="Hiện / ẩn mật khẩu"><i class="fa-regular fa-eye"></i></button>
+          </div>
+        </div>
+        <div class="auth-row-links">
+          <button type="button" class="link-btn" id="btnForgotPassword"><i class="fa-solid fa-key"></i> Quên mật khẩu?</button>
+        </div>
+        <button type="submit" class="btn btn-primary full" id="btnLoginSubmit"><i class="fa-solid fa-right-to-bracket"></i> Đăng nhập</button>
+
+        <div class="auth-divider"><span>hoặc</span></div>
+        <button type="button" class="btn btn-google full" data-google-signin>
+          <svg class="google-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          Đăng nhập bằng Google
+        </button>
+        <div class="auth-hint">Dữ liệu của bạn được lưu riêng theo tài khoản trên Cloud Firestore.</div>
+      </form>
+
+      <!-- ---- FORM ĐĂNG KÝ ---- -->
+      <form class="auth-form hidden" id="registerForm" novalidate>
+        <h3>Tạo tài khoản mới</h3>
+        <div class="sub">Bắt đầu theo dõi tài chính cá nhân của bạn.</div>
+        <div class="field">
+          <label for="registerNameInput">Tên của bạn</label>
+          <input type="text" id="registerNameInput" placeholder="Nguyễn Văn A" autocomplete="name" required>
+        </div>
+        <div class="field">
+          <label for="registerUsernameInput">Tên đăng nhập (hiển thị)</label>
+          <input type="text" id="registerUsernameInput" placeholder="vd: minh hoặc minh.123" pattern="[a-z0-9.]{2,}" title="Chữ thường, số và dấu chấm, tối thiểu 2 ký tự" required>
+          <div class="username-suggestions hidden" id="usernameSuggestions"></div>
+        </div>
+        <div class="field">
+          <label for="registerEmailInput">Email</label>
+          <input type="email" id="registerEmailInput" placeholder="vd: ban@email.com" autocomplete="email" required>
+        </div>
+        <div class="field">
+          <label for="registerPasswordInput">Mật khẩu</label>
+          <div class="password-wrap">
+            <input type="password" id="registerPasswordInput" placeholder="Tối thiểu 6 ký tự" minlength="6" autocomplete="new-password" required>
+            <button type="button" class="pw-toggle" data-pw-target="registerPasswordInput" aria-label="Hiện / ẩn mật khẩu"><i class="fa-regular fa-eye"></i></button>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary full" id="btnRegisterSubmit"><i class="fa-solid fa-user-plus"></i> Tạo tài khoản</button>
+
+        <div class="auth-divider"><span>hoặc</span></div>
+        <button type="button" class="btn btn-google full" data-google-signin>
+          <svg class="google-icon" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          Đăng ký bằng Google
+        </button>
+        <div class="auth-hint">Tên đăng nhập viết thường, có thể có dấu chấm hoặc số, tối thiểu 2 ký tự.</div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODAL: QUÊN MẬT KHẨU ================= -->
+<div class="modal-overlay hidden" id="forgotModalOverlay">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Khôi phục mật khẩu</h3>
+      <button class="modal-close" type="button" id="btnCloseForgot"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="sub" style="font-size:0.85rem;color:var(--text-muted);margin:-10px 0 18px;">
+      Nhập email đã đăng ký. Chúng tôi sẽ gửi cho bạn một liên kết đặt lại mật khẩu.
+    </div>
+    <form id="forgotForm" novalidate>
+      <div class="field">
+        <label for="forgotEmailInput">Email</label>
+        <input type="email" id="forgotEmailInput" placeholder="vd: ban@email.com" autocomplete="email" required>
+      </div>
+      <button type="submit" class="btn btn-primary full" id="btnForgotSubmit"><i class="fa-solid fa-paper-plane"></i> Gửi liên kết khôi phục</button>
+    </form>
+  </div>
+</div>
+
+<div id="appScreen" class="hidden">
+  <div class="sidebar-backdrop" onclick="closeMobileDrawer()"></div>
+  <div class="mobile-topbar">
+    <button class="mobile-menu-btn" onclick="openMobileDrawer()" aria-label="Mở menu"><i class="fa-solid fa-bars"></i></button>
+    <div class="mobile-topbar-brand"><span class="brand-mark"><i class="fa-solid fa-wallet"></i></span> Sổ Chi Tiêu</div>
+    <button class="mobile-avatar-btn" onclick="openProfileModal()" aria-label="Hồ sơ cá nhân"><div class="user-avatar" id="userAvatarMobile">M</div></button>
+  </div>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark"><i class="fa-solid fa-wallet"></i></span> Sổ Chi Tiêu</div>
+
+    <div class="space-switcher-wrap">
+      <select id="spaceSwitcherSelect" class="space-switcher" onchange="handleSpaceSwitch(this.value)">
+        <option value="personal">🧍 Không gian cá nhân</option>
+      </select>
+    </div>
+
+    <div id="personalNavItems">
+      <button class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')"><i class="fa-solid fa-grid-2"></i> Tổng quan</button>
+      <button class="nav-item" data-view="transactions" onclick="switchView('transactions')"><i class="fa-solid fa-arrow-right-arrow-left"></i> Giao dịch</button>
+      <button class="nav-item" data-view="budgets" onclick="switchView('budgets')"><i class="fa-solid fa-chart-pie"></i> Ngân sách</button>
+      <button class="nav-item" data-view="savings" onclick="switchView('savings')"><i class="fa-solid fa-piggy-bank"></i> Tích lũy</button>
+      <button class="nav-item" data-view="wallets" onclick="switchView('wallets')"><i class="fa-solid fa-credit-card"></i> Ví &amp; Chuyển tiền</button>
+      <button class="nav-item" data-view="debts" onclick="switchView('debts')">
+        <i class="fa-solid fa-handshake"></i> Công nợ
+        <span class="nav-badge" id="debtBadge">0</span>
+      </button>
+      <button class="nav-item" data-view="analytics" onclick="switchView('analytics')"><i class="fa-solid fa-chart-line"></i> Phân tích</button>
+      <button class="nav-item" data-view="recurring" onclick="switchView('recurring')">
+        <i class="fa-solid fa-repeat"></i> Định kỳ
+        <span class="nav-badge" id="recurringBadge">1</span>
+      </button>
+      <button class="nav-item" data-view="notifications" onclick="switchView('notifications')">
+        <i class="fa-solid fa-bell"></i> Thông báo
+        <span class="nav-badge" id="notifBadge">0</span>
+      </button>
+      <button class="nav-item" data-view="settings" onclick="switchView('settings')"><i class="fa-solid fa-gear"></i> Cài đặt</button>
+    </div>
+
+    <div id="groupNavItems" class="hidden">
+      <button class="nav-item active" data-view="group" onclick="switchView('group')"><i class="fa-solid fa-people-group"></i> Không gian nhóm</button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-chip" onclick="openProfileModal()" title="Sửa thông tin cá nhân">
+        <div class="user-avatar" id="userAvatar">M</div>
+        <div class="user-info">
+          <div class="name" id="userName">Trần Anh Minh</div>
+          <div class="email" id="userEmail">minh.tran@email.com</div>
+        </div>
+        <i class="fa-solid fa-pen user-edit-hint"></i>
+      </div>
+      <div class="darkmode-row">
+        <span><i class="fa-solid fa-moon"></i> Chế độ tối</span>
+        <label class="switch">
+          <input type="checkbox" id="darkModeToggleSide" onchange="toggleDarkMode(this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <button class="logout-btn" onclick="handleLogout()"><i class="fa-solid fa-arrow-right-from-bracket"></i> Đăng xuất</button>
+    </div>
+  </aside>
+
+  <nav class="bottom-nav">
+    <button class="bn-item active" data-view="dashboard" onclick="switchView('dashboard')"><i class="fa-solid fa-grid-2"></i><span>Tổng quan</span></button>
+    <button class="bn-item" data-view="transactions" onclick="switchView('transactions')"><i class="fa-solid fa-arrow-right-arrow-left"></i><span>Giao dịch</span></button>
+    <button class="bn-fab" onclick="openModal()" aria-label="Thêm giao dịch"><i class="fa-solid fa-plus"></i></button>
+    <button class="bn-item" data-view="debts" onclick="switchView('debts')"><i class="fa-solid fa-handshake"></i><span>Công nợ</span></button>
+    <button class="bn-item" onclick="openMobileDrawer()"><i class="fa-solid fa-ellipsis"></i><span>Thêm</span></button>
+  </nav>
+
+  <main class="main">
+    <div class="main-header">
+      <div>
+        <h1 id="pageTitle">Tổng quan tháng này</h1>
+        <div class="sub" id="pageSub">Đang cập nhật theo thời gian thực</div>
+      </div>
+      <button class="btn-add" id="btnAddTx" onclick="openModal()"><i class="fa-solid fa-plus"></i> Thêm giao dịch</button>
+    </div>
+
+    <!-- ============ DASHBOARD VIEW ============ -->
+    <div id="view-dashboard">
+      <div class="time-widget">
+        <div class="time-widget-icon"><i class="fa-solid fa-clock"></i></div>
+        <div class="time-widget-info">
+          <div class="time-widget-time" id="liveClockTime">--:--:--</div>
+          <div class="time-widget-date" id="liveClockDate">--</div>
+        </div>
+        <div class="time-widget-location">
+          <i class="fa-solid fa-earth-asia"></i>
+          <span id="liveClockLocation">--</span>
+        </div>
+      </div>
+
+      <div class="overview-grid">
+        <div class="stat-card stat-balance">
+          <div class="top-row">
+            <div><div class="label">Tổng số dư</div><div class="value" id="statBalance">0 đ</div></div>
+            <div class="icon-badge"><i class="fa-solid fa-scale-balanced"></i></div>
+          </div>
+        </div>
+        <div class="stat-card stat-income">
+          <div class="top-row">
+            <div><div class="label">Tổng thu (tháng)</div><div class="value" id="statIncome">0 đ</div></div>
+            <div class="icon-badge"><i class="fa-solid fa-arrow-trend-up"></i></div>
+          </div>
+        </div>
+        <div class="stat-card stat-expense">
+          <div class="top-row">
+            <div><div class="label">Tổng chi (tháng)</div><div class="value" id="statExpense">0 đ</div></div>
+            <div class="icon-badge"><i class="fa-solid fa-arrow-trend-down"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content-grid">
+        <div class="panel dash-eq-panel">
+          <div class="panel-header">
+            <h3>Giao dịch gần đây</h3>
+            <button class="link" onclick="switchView('transactions')">Xem tất cả</button>
+          </div>
+          <div class="panel-body-flex">
+            <table class="tx-table">
+              <thead><tr><th>Giao dịch</th><th>Danh mục</th><th>Ngày</th><th>Số tiền</th><th></th></tr></thead>
+              <tbody id="txTableBodyDash"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel dash-eq-panel">
+          <div class="panel-header"><h3>Chi tiêu theo danh mục</h3></div>
+          <div class="panel-body-flex category-spend-body">
+            <div class="chart-wrap" id="donutChartWrap"><div id="donutChart" class="svg-chart"></div></div>
+            <div class="chart-legend" id="chartLegend"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel section">
+        <div class="panel-header">
+          <h3>Tình hình ngân sách</h3>
+          <button class="link" onclick="switchView('budgets')">Quản lý ngân sách</button>
+        </div>
+        <div id="budgetOverviewDash"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Tổng quan công nợ</h3>
+          <button class="link" onclick="switchView('debts')">Xem sổ công nợ</button>
+        </div>
+        <div id="dashDebtStatusBanner"></div>
+        <div class="dash-debt-table-wrap" id="dashDebtTableWrap"></div>
+      </div>
+    </div>
+
+    <!-- ============ TRANSACTIONS VIEW ============ -->
+    <div id="view-transactions" class="hidden">
+      <div class="panel">
+        <div class="panel-header"><h3>Tất cả giao dịch</h3></div>
+        <table class="tx-table">
+          <thead><tr><th>Giao dịch</th><th>Danh mục</th><th>Ngày</th><th>Số tiền</th><th></th></tr></thead>
+          <tbody id="txTableBodyFull"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ BUDGETS VIEW ============ -->
+    <div id="view-budgets" class="hidden">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Quản lý ngân sách</h3>
+          <div class="panel-header-actions">
+            <button class="btn btn-outline" onclick="openCategoryModal()"><i class="fa-solid fa-tags"></i> Quản lý danh mục</button>
+            <button class="btn btn-primary" onclick="openBudgetModal()"><i class="fa-solid fa-plus"></i> Thêm ngân sách</button>
+          </div>
+        </div>
+        <div id="budgetListFull"></div>
+      </div>
+    </div>
+
+    <!-- ============ SAVINGS GOALS VIEW (Tích lũy) ============ -->
+    <div id="view-savings" class="hidden">
+      <div class="panel-header" style="margin-bottom:14px;">
+        <h3 style="font-size:0.95rem;color:var(--text-muted);font-weight:700;">Các mục tiêu của bạn</h3>
+        <button class="btn btn-primary" onclick="openSavingsGoalModal()"><i class="fa-solid fa-plus"></i> Thêm mục tiêu</button>
+      </div>
+      <div class="savings-grid" id="savingsGrid"></div>
+    </div>
+
+    <!-- ============ WALLETS VIEW ============ -->
+    <div id="view-wallets" class="hidden">
+      <div class="panel-header" style="margin-bottom:14px;">
+        <h3 style="font-size:0.95rem;color:var(--text-muted);font-weight:700;">Các nguồn tiền của bạn</h3>
+        <button class="btn btn-primary" onclick="openWalletModal()"><i class="fa-solid fa-plus"></i> Thêm ví</button>
+      </div>
+      <div class="wallet-grid" id="walletGrid"></div>
+
+      <div class="panel section">
+        <div class="panel-header"><h3>Chuyển tiền nội bộ</h3></div>
+        <div class="transfer-panel">
+          <div class="field"><label>Từ ví</label><select id="transferFrom"></select></div>
+          <div class="transfer-arrow"><i class="fa-solid fa-arrow-right-long"></i></div>
+          <div class="field"><label>Đến ví</label><select id="transferTo"></select></div>
+          <div class="field"><label>Số tiền (đ)</label><input type="number" id="transferAmount" min="0" step="10000" placeholder="500000"></div>
+          <button class="btn btn-primary" onclick="handleTransfer()"><i class="fa-solid fa-right-left"></i> Xác nhận chuyển</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><h3>Lịch sử chuyển tiền</h3></div>
+        <div id="walletLog"></div>
+      </div>
+    </div>
+
+    <!-- ============ DEBTS VIEW (Công nợ) ============ -->
+    <div id="view-debts" class="hidden">
+      <div class="debt-summary-grid">
+        <div class="stat-card stat-income">
+          <div class="top-row">
+            <div><div class="label">Người khác nợ tôi</div><div class="value" id="statDebtOwedToMe">0 đ</div></div>
+            <div class="icon-badge"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+          </div>
+        </div>
+        <div class="stat-card stat-expense">
+          <div class="top-row">
+            <div><div class="label">Tôi nợ người khác</div><div class="value" id="statDebtIOwe">0 đ</div></div>
+            <div class="icon-badge"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+          </div>
+        </div>
+        <div class="stat-card stat-balance">
+          <div class="top-row">
+            <div><div class="label">Chênh lệch ròng</div><div class="value" id="statDebtNet">0 đ</div></div>
+            <div class="icon-badge"><i class="fa-solid fa-scale-balanced"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Sổ công nợ</h3>
+          <button class="btn btn-primary" onclick="openDebtModal()"><i class="fa-solid fa-plus"></i> Thêm khoản công nợ</button>
+        </div>
+        <div class="sub" style="font-size:0.82rem;color:var(--text-muted);margin:-10px 0 16px;">Theo dõi khoản mình cho vay (người khác nợ mình) và khoản mình đi vay (mình nợ người khác)</div>
+
+        <div class="debt-tabs">
+          <button class="tab-owed active" id="btnDebtTabOwed" onclick="setDebtTab('owed_to_me')"><i class="fa-solid fa-arrow-down"></i> Người khác nợ tôi <span class="cnt" id="debtCntOwed">0</span></button>
+          <button class="tab-owe" id="btnDebtTabOwe" onclick="setDebtTab('i_owe')"><i class="fa-solid fa-arrow-up"></i> Tôi nợ người khác <span class="cnt" id="debtCntOwe">0</span></button>
+        </div>
+
+        <div id="debtList"></div>
+      </div>
+    </div>
+
+    <!-- ============ ANALYTICS VIEW ============ -->
+    <div id="view-analytics" class="hidden">
+      <div class="panel section">
+        <div class="panel-header">
+          <h3>Xu hướng Thu &amp; Chi</h3>
+          <div class="filter-row">
+            <button class="btn-outline btn" data-range="week" onclick="setAnalyticsRange('week')">Tuần này</button>
+            <button class="btn-outline btn active" data-range="month" onclick="setAnalyticsRange('month')">Tháng này</button>
+            <button class="btn-outline btn" data-range="year" onclick="setAnalyticsRange('year')">Năm nay</button>
+          </div>
+        </div>
+        <div class="chart-tall"><div id="trendChart" class="svg-chart"></div></div>
+      </div>
+
+      <div class="analytics-grid">
+        <div class="panel">
+          <div class="panel-header"><h3>Chi tiêu 6 tháng gần nhất</h3></div>
+          <div class="chart-tall" style="height:230px;"><div id="barChart" class="svg-chart"></div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><h3>Top 3 danh mục tốn nhiều nhất (tháng này)</h3></div>
+          <div id="topSpendList"></div>
+        </div>
+      </div>
+
+      <div class="panel section">
+        <div class="panel-header">
+          <h3>Tổng kết thu chi theo tháng</h3>
+          <select class="settings-select" id="monthlySummaryRange" style="min-width:170px;padding:8px 12px;font-size:0.85rem;" onchange="renderMonthlySummary()">
+            <option value="6">6 tháng gần nhất</option>
+            <option value="12" selected>12 tháng gần nhất</option>
+            <option value="24">24 tháng gần nhất</option>
+          </select>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="tx-table">
+            <thead><tr><th>Tháng</th><th>Tổng thu</th><th>Tổng chi</th><th>Chênh lệch</th><th></th></tr></thead>
+            <tbody id="monthlySummaryBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ RECURRING VIEW ============ -->
+    <div id="view-recurring" class="hidden">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Giao dịch định kỳ</h3>
+          <button class="btn btn-primary" onclick="openRecurringModal()"><i class="fa-solid fa-plus"></i> Thêm khoản định kỳ</button>
+        </div>
+        <div class="sub" style="font-size:0.82rem;color:var(--text-muted);margin:-10px 0 16px;">Bật để tự động thanh toán hàng tháng</div>
+        <div id="recurringList"></div>
+      </div>
+    </div>
+
+    <!-- ============ NOTIFICATIONS VIEW ============ -->
+    <div id="view-notifications" class="hidden">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Thông báo</h3>
+          <div style="display:flex;align-items:center;gap:16px;">
+            <button class="link" id="btnMarkAllNotifRead" onclick="markAllNotificationsRead()"><i class="fa-solid fa-check-double"></i> Đánh dấu tất cả đã đọc</button>
+            <button class="link" id="btnClearAllNotif" onclick="clearAllNotifications()" style="color:var(--color-expense);"><i class="fa-solid fa-trash-can"></i> Xoá tất cả</button>
+          </div>
+        </div>
+        <div class="sub" style="font-size:0.82rem;color:var(--text-muted);margin:-10px 0 16px;">Tổng hợp các nhắc nhở từ hóa đơn định kỳ, ngân sách và công nợ của bạn</div>
+        <div class="notif-toolbar">
+          <div class="notif-tabs">
+            <button type="button" class="notif-tab active" data-notif-filter="all" onclick="setNotifFilter('all')">Tất cả <span class="count" id="notifCountAll">0</span></button>
+            <button type="button" class="notif-tab" data-notif-filter="unread" onclick="setNotifFilter('unread')">Chưa đọc <span class="count" id="notifCountUnread">0</span></button>
+          </div>
+        </div>
+        <div class="notif-list" id="notificationsList"></div>
+      </div>
+    </div>
+
+    <!-- ============ SETTINGS VIEW ============ -->
+    <div id="view-settings" class="hidden">
+      <div class="panel">
+        <div class="panel-header"><h3>Cài đặt chung</h3></div>
+
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="stitle">Thông tin cá nhân</div>
+            <div class="sdesc" id="settingsProfilePreview">Trần Anh Minh · minh.tran@email.com</div>
+          </div>
+          <button class="btn btn-outline" onclick="openProfileModal()"><i class="fa-solid fa-pen"></i> Sửa thông tin</button>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="stitle">Bảo mật &amp; Mật khẩu</div>
+            <div class="sdesc" id="securityDesc">Đang kiểm tra...</div>
+          </div>
+          <button class="btn btn-outline" id="btnSecurityAction" onclick="openSecurityModal()"><i class="fa-solid fa-lock"></i> <span id="btnSecurityActionLabel">Mật khẩu</span></button>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="stitle">Chế độ tối (Dark Mode)</div>
+            <div class="sdesc">Chuyển giao diện sang nền tối, dịu mắt hơn khi dùng vào buổi tối.</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="darkModeToggleSettings" onchange="toggleDarkMode(this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="stitle">Quốc gia &amp; Múi giờ</div>
+            <div class="sdesc">Chọn quốc gia/múi giờ để đồng bộ đồng hồ thời gian thực hiển thị trên trang Tổng quan.</div>
+          </div>
+          <select id="timezoneSelect" class="settings-select" onchange="handleTimezoneChange(this.value)"></select>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="stitle">Danh mục giao dịch</div>
+            <div class="sdesc">Thêm, sửa hoặc xóa danh mục thu/chi để phù hợp với thói quen chi tiêu của bạn.</div>
+          </div>
+          <button class="btn btn-outline" onclick="openCategoryModal()"><i class="fa-solid fa-tags"></i> Quản lý danh mục</button>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="stitle">Xuất dữ liệu ra Excel</div>
+            <div class="sdesc">Tải xuống toàn bộ giao dịch, số dư các ví, hóa đơn định kỳ và công nợ dưới dạng file .xlsx được trình bày rõ ràng, có màu sắc phân loại.</div>
+          </div>
+          <button class="btn btn-primary" onclick="exportExcel()"><i class="fa-solid fa-file-export"></i> Xuất Excel</button>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="stitle">Xóa toàn bộ lịch sử giao dịch</div>
+            <div class="sdesc">Xóa vĩnh viễn tất cả giao dịch thu/chi đã ghi nhận. Số dư ví, ngân sách, hóa đơn định kỳ và công nợ sẽ không bị ảnh hưởng. Hành động này không thể hoàn tác.</div>
+          </div>
+          <button class="btn btn-outline-danger" onclick="deleteAllTransactions()"><i class="fa-solid fa-trash-can"></i> Xóa toàn bộ giao dịch</button>
+        </div>
+
+        <div class="settings-row">
+          <div class="settings-info">
+            <div class="stitle">Thông báo hóa đơn sắp đến hạn</div>
+            <div class="sdesc">Nhận cảnh báo khi một khoản chi định kỳ sắp đến ngày thanh toán.</div>
+          </div>
+          <label class="switch"><input type="checkbox" checked disabled><span class="slider"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ GROUP SPACE VIEW (Không gian nhóm) ============ -->
+    <div id="view-group" class="hidden">
+      <div class="panel" style="margin-bottom:18px;">
+        <div class="panel-header">
+          <h3 id="groupNameTitle">Nhóm</h3>
+          <button class="btn btn-outline" onclick="openGroupInviteModal()"><i class="fa-solid fa-user-plus"></i> Mời thành viên</button>
+        </div>
+        <div class="group-members-row" id="groupMembersRow"></div>
+      </div>
+
+      <div class="panel-header" style="margin-bottom:14px;">
+        <h3 style="font-size:0.95rem;color:var(--text-muted);font-weight:700;">Ví của nhóm</h3>
+        <button class="btn btn-primary" onclick="openGroupWalletModal()"><i class="fa-solid fa-plus"></i> Thêm ví nhóm</button>
+      </div>
+      <div class="wallet-grid" id="groupWalletGrid" style="margin-bottom:26px;"></div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Giao dịch của nhóm</h3>
+          <button class="btn btn-primary" onclick="openGroupTransactionModal()"><i class="fa-solid fa-plus"></i> Thêm giao dịch</button>
+        </div>
+        <table class="tx-table">
+          <thead><tr><th>Giao dịch</th><th>Người chi/thu</th><th>Ngày</th><th>Số tiền</th><th></th></tr></thead>
+          <tbody id="groupTxTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ================= ADD TRANSACTION MODAL ================= -->
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="txModalTitle">Thêm giao dịch</h3>
+      <button class="modal-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="txForm" onsubmit="handleAddTransaction(event)">
+      <div class="type-switch">
+        <button type="button" class="sel-expense active" id="btnTypeExpense" onclick="setTxType('expense')"><i class="fa-solid fa-arrow-trend-down"></i> Chi tiêu</button>
+        <button type="button" class="sel-income" id="btnTypeIncome" onclick="setTxType('income')"><i class="fa-solid fa-arrow-trend-up"></i> Thu nhập</button>
+      </div>
+
+      <div class="field">
+        <label>Số tiền (đ)</label>
+        <input type="number" id="inputAmount" placeholder="Ví dụ: 150000" min="0" step="1000" required>
+      </div>
+
+      <div class="field-row">
+        <div class="field"><label>Danh mục</label><select id="inputCategory" required></select></div>
+        <div class="field"><label>Ngày</label><input type="date" id="inputDate" required></div>
+      </div>
+
+      <div class="field">
+        <label>Ví thanh toán</label>
+        <select id="inputWallet" required></select>
+      </div>
+
+      <div class="field">
+        <label>Ghi chú</label>
+        <input type="text" id="inputNote" placeholder="Ví dụ: Ăn trưa với đồng nghiệp">
+      </div>
+
+      <div class="field">
+        <label>Ảnh minh chứng (tối đa 5 ảnh)</label>
+        <div class="attach-drop" onclick="document.getElementById('inputAttachments').click()">
+          <i class="fa-solid fa-camera"></i>
+          <div class="adesc" id="attachDropDesc">Nhấn để chọn ảnh hoá đơn / biên lai</div>
+        </div>
+        <input type="file" id="inputAttachments" accept="image/*" multiple class="hidden" onchange="handleAttachmentSelect(event)">
+        <div class="attach-preview-grid" id="attachPreviewGrid"></div>
+      </div>
+
+      <button type="submit" class="btn btn-primary full" id="txSubmitBtn"><i class="fa-solid fa-check"></i> Lưu giao dịch</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= ADD/EDIT BUDGET MODAL ================= -->
+<div class="modal-overlay hidden" id="budgetModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="budgetModalTitle">Thêm ngân sách</h3>
+      <button class="modal-close" onclick="closeBudgetModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="budgetForm" onsubmit="handleSaveBudget(event)">
+      <div class="field">
+        <label>Danh mục chi tiêu</label>
+        <select id="budgetInputCategory" required></select>
+      </div>
+      <div class="field">
+        <label>Hạn mức mỗi tháng (đ)</label>
+        <input type="number" id="budgetInputLimit" placeholder="Ví dụ: 2000000" min="0" step="10000" required>
+      </div>
+      <div class="field" style="display:flex;align-items:center;justify-content:space-between;">
+        <label style="margin:0;">Cộng dồn số dư từ tháng trước</label>
+        <label class="switch"><input type="checkbox" id="budgetInputRollover" checked><span class="slider"></span></label>
+      </div>
+      <p class="field-hint">Nếu tháng trước tiêu chưa hết hạn mức, phần dư sẽ tự cộng thêm vào hạn mức tháng này của danh mục.</p>
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-check"></i> Lưu ngân sách</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= ADD/EDIT SAVINGS GOAL MODAL ================= -->
+<div class="modal-overlay hidden" id="savingsGoalModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="savingsGoalModalTitle">Thêm mục tiêu tích lũy</h3>
+      <button class="modal-close" onclick="closeSavingsGoalModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="savingsGoalForm" onsubmit="handleSaveSavingsGoal(event)">
+      <input type="hidden" id="savingsGoalEditingId" value="">
+      <div class="field">
+        <label>Tên mục tiêu</label>
+        <input type="text" id="savingsGoalInputName" placeholder="Ví dụ: Mua iPhone 17, Đi du lịch Đà Lạt" required>
+      </div>
+      <div class="field">
+        <label>Số tiền mục tiêu (đ)</label>
+        <input type="number" id="savingsGoalInputTarget" placeholder="Ví dụ: 25000000" min="1000" step="10000" required>
+      </div>
+      <div class="field">
+        <label>Màu sắc</label>
+        <div class="color-row">
+          <div class="color-swatch-box">
+            <input type="color" id="savingsGoalInputColor" value="#5FB0B7" oninput="syncColorFromPicker('savingsGoalInputColor','savingsGoalInputColorHex')">
+          </div>
+          <div class="hex-input-wrap">
+            <span class="hex-hash">#</span>
+            <input type="text" id="savingsGoalInputColorHex" class="hex-input" value="5FB0B7" maxlength="6" placeholder="5FB0B7" autocomplete="off" spellcheck="false" oninput="syncColorFromHex(this,'savingsGoalInputColor')">
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Biểu tượng</label>
+        <div class="icon-picker" id="savingsGoalIconPicker"></div>
+        <input type="hidden" id="savingsGoalInputIcon" value="fa-piggy-bank">
+      </div>
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-check"></i> Lưu mục tiêu</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= DEPOSIT TO SAVINGS GOAL MODAL ================= -->
+<div class="modal-overlay hidden" id="savingsDepositModalOverlay">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Nạp tiền vào quỹ</h3>
+      <button class="modal-close" onclick="closeSavingsDepositModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="savingsDepositForm" onsubmit="handleDepositSavingsGoal(event)">
+      <input type="hidden" id="savingsDepositGoalId" value="">
+      <p class="field-hint" style="margin-top:0;">Nạp vào: <strong id="savingsDepositGoalName">—</strong></p>
+      <div class="field">
+        <label>Số tiền nạp (đ)</label>
+        <input type="number" id="savingsDepositAmount" placeholder="Ví dụ: 500000" min="1000" step="10000" required>
+      </div>
+      <div class="field" style="display:flex;align-items:center;justify-content:space-between;">
+        <label style="margin:0;">Trừ số tiền này vào một ví</label>
+        <label class="switch"><input type="checkbox" id="savingsDepositUseWallet" checked onchange="toggleSavingsDepositWalletField(this.checked)"><span class="slider"></span></label>
+      </div>
+      <div class="field" id="savingsDepositWalletField">
+        <label>Trừ từ ví</label>
+        <select id="savingsDepositWallet"></select>
+      </div>
+      <p class="field-hint" id="savingsDepositHint">Số dư ví đã chọn sẽ giảm tương ứng, y như một khoản chuyển tiền vào quỹ.</p>
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-check"></i> Xác nhận nạp tiền</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= GROUP MEMBER QR SETUP MODAL ================= -->
+<div class="modal-overlay hidden" id="groupMemberQrModalOverlay">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Mã QR nhận tiền của tôi</h3>
+      <button class="modal-close" onclick="closeGroupMemberQrModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="groupMemberQrForm" onsubmit="handleSaveGroupMemberQr(event)">
+      <p class="field-hint" style="margin-top:0;">Thông tin này hiển thị cho các thành viên khác trong nhóm này quét mã chuyển tiền lại cho bạn (ví dụ sau khi dùng "Chia tiền").</p>
+      <div class="field">
+        <label>Ngân hàng</label>
+        <div class="bank-combo" id="groupMemberBankCombo">
+          <input type="text" id="groupMemberBankBinSearch" placeholder="Gõ để tìm ngân hàng..." autocomplete="off">
+          <input type="hidden" id="groupMemberBankBin">
+          <div class="bank-combo-menu hidden" id="groupMemberBankComboMenu"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Số tài khoản</label>
+        <input type="text" id="groupMemberAccountNumber" placeholder="Ví dụ: 0123456789" inputmode="numeric" required>
+      </div>
+      <div class="field">
+        <label>Tên chủ tài khoản</label>
+        <input type="text" id="groupMemberAccountHolder" placeholder="Ví dụ: NGUYEN VAN A" style="text-transform:uppercase;" required>
+      </div>
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-check"></i> Lưu mã QR</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= CREATE GROUP MODAL ================= -->
+<div class="modal-overlay hidden" id="groupCreateModalOverlay">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Tạo nhóm/cặp đôi mới</h3>
+      <button class="modal-close" onclick="closeGroupCreateModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="groupCreateForm" onsubmit="handleCreateGroup(event)">
+      <div class="field">
+        <label>Tên nhóm</label>
+        <input type="text" id="groupCreateInputName" placeholder="Ví dụ: Gia đình, Vợ chồng, Phòng trọ 302" required>
+      </div>
+      <p class="field-hint" style="margin-top:0;">Sau khi tạo, bạn có thể mời thêm thành viên bằng email của họ.</p>
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-check"></i> Tạo nhóm</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= INVITE MEMBER MODAL ================= -->
+<div class="modal-overlay hidden" id="groupInviteModalOverlay">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Mời thành viên vào nhóm</h3>
+      <button class="modal-close" onclick="closeGroupInviteModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="groupInviteForm" onsubmit="handleInviteGroupMember(event)">
+      <div class="field">
+        <label>Email hoặc tên đăng nhập (username) của thành viên</label>
+        <input type="text" id="groupInviteInputIdentifier" placeholder="Ví dụ: ban@email.com hoặc minhtran" required>
+      </div>
+      <p class="field-hint" style="margin-top:0;">Người được mời cần đã từng đăng nhập ứng dụng này ít nhất 1 lần bằng đúng email/username đó.</p>
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-user-plus"></i> Thêm vào nhóm</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= ADD GROUP WALLET MODAL ================= -->
+<div class="modal-overlay hidden" id="groupWalletModalOverlay">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h3>Thêm ví nhóm</h3>
+      <button class="modal-close" onclick="closeGroupWalletModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="groupWalletForm" onsubmit="handleSaveGroupWallet(event)">
+      <div class="field">
+        <label>Tên ví</label>
+        <input type="text" id="groupWalletInputName" placeholder="Ví dụ: Quỹ chung, Ví sinh hoạt" required>
+      </div>
+      <div class="field">
+        <label>Số dư ban đầu (đ)</label>
+        <input type="number" id="groupWalletInputBalance" placeholder="0" min="0" step="10000" value="0" required>
+      </div>
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-check"></i> Tạo ví nhóm</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= ADD GROUP TRANSACTION MODAL ================= -->
+<div class="modal-overlay hidden" id="groupTxModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="groupTxModalTitle">Thêm giao dịch nhóm</h3>
+      <button class="modal-close" onclick="closeGroupTransactionModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="groupTxForm" onsubmit="handleSaveGroupTransaction(event)">
+      <div class="type-switch">
+        <button type="button" class="sel-expense active" id="groupTxBtnExpense" onclick="setGroupTxType('expense')"><i class="fa-solid fa-arrow-trend-down"></i> Chi tiêu</button>
+        <button type="button" class="sel-income" id="groupTxBtnIncome" onclick="setGroupTxType('income')"><i class="fa-solid fa-arrow-trend-up"></i> Thu nhập</button>
+      </div>
+      <div class="field">
+        <label>Số tiền (đ)</label>
+        <input type="number" id="groupTxInputAmount" placeholder="Ví dụ: 300000" min="0" step="1000" required oninput="renderGroupSplitSuggestion()">
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Danh mục</label><select id="groupTxInputCategory" required></select></div>
+        <div class="field"><label>Ngày</label><input type="date" id="groupTxInputDate" required></div>
+      </div>
+      <div class="field">
+        <label>Ví thanh toán</label>
+        <select id="groupTxInputWallet" required></select>
+      </div>
+      <div class="field">
+        <label>Người chi/thu tiền</label>
+        <select id="groupTxInputPaidBy" required></select>
+      </div>
+      <div class="field">
+        <label>Ghi chú</label>
+        <input type="text" id="groupTxInputNote" placeholder="Ví dụ: Tiền điện tháng 9">
+      </div>
+      <div class="field">
+        <label>Ảnh minh chứng (tối đa 5 ảnh)</label>
+        <div class="attach-drop" onclick="document.getElementById('groupTxAttachInput').click()">
+          <i class="fa-solid fa-camera"></i>
+          <div class="adesc" id="groupTxAttachDropDesc">Nhấn để chọn ảnh hoá đơn / biên lai</div>
+        </div>
+        <input type="file" id="groupTxAttachInput" accept="image/*" multiple class="hidden" onchange="handleGroupTxAttachSelect(event)">
+        <div class="attach-preview-grid" id="groupTxAttachPreviewGrid"></div>
+      </div>
+      <div class="split-suggestion hidden" id="groupSplitSuggestion"></div>
+      <button type="submit" class="btn btn-primary full" id="groupTxSubmitBtn"><i class="fa-solid fa-check"></i> Lưu giao dịch</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= QUẢN LÝ DANH MỤC MODAL ================= -->
+<div class="modal-overlay hidden" id="categoryModalOverlay">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3>Quản lý danh mục</h3>
+      <button class="modal-close" onclick="closeCategoryModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="debt-tabs">
+      <button class="tab-owe active" id="btnCatMgrExpense" onclick="setCatMgrType('expense')"><i class="fa-solid fa-arrow-trend-down"></i> Danh mục chi</button>
+      <button class="tab-owed" id="btnCatMgrIncome" onclick="setCatMgrType('income')"><i class="fa-solid fa-arrow-trend-up"></i> Danh mục thu</button>
+    </div>
+
+    <div class="category-list" id="categoryList"></div>
+
+    <div class="modal-section-title" id="categoryFormTitle">Thêm danh mục mới</div>
+    <div class="category-form-hint hidden" id="categoryEditHint">
+      <i class="fa-solid fa-pen"></i> <span>Đang sửa danh mục</span>
+      <button type="button" class="btn-cancel-edit" onclick="cancelEditCategory()">Hủy sửa</button>
+    </div>
+    <form id="categoryForm" onsubmit="handleSaveCategory(event)">
+      <div class="field">
+        <label>Tên danh mục</label>
+        <input type="text" id="categoryInputLabel" placeholder="Ví dụ: Du lịch" required>
+      </div>
+      <div class="field">
+        <label>Màu sắc</label>
+        <div class="color-row">
+          <div class="color-swatch-box">
+            <input type="color" id="categoryInputColor" value="#7A8FC2" oninput="syncColorFromPicker('categoryInputColor','categoryInputColorHex')">
+          </div>
+          <div class="hex-input-wrap">
+            <span class="hex-hash">#</span>
+            <input type="text" id="categoryInputColorHex" class="hex-input" value="7A8FC2" maxlength="6" placeholder="F29191" autocomplete="off" spellcheck="false" oninput="syncColorFromHex(this,'categoryInputColor')">
+          </div>
+          <span style="font-size:0.82rem;color:var(--text-muted);">Chọn màu hoặc nhập mã HEX</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Biểu tượng</label>
+        <div class="icon-picker" id="categoryIconPicker"></div>
+        <input type="hidden" id="categoryInputIcon" value="fa-tag">
+      </div>
+      <button type="submit" class="btn btn-primary full" id="categorySubmitBtn"><i class="fa-solid fa-check"></i> Lưu danh mục</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= ADD/EDIT RECURRING MODAL ================= -->
+<div class="modal-overlay hidden" id="recurringModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="recurringModalTitle">Thêm khoản định kỳ</h3>
+      <button class="modal-close" onclick="closeRecurringModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="recurringForm" onsubmit="handleSaveRecurring(event)">
+      <div class="field">
+        <label>Tên khoản thu/chi</label>
+        <input type="text" id="recurringInputName" placeholder="Ví dụ: Tiền thuê nhà" required>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Số tiền (đ)</label><input type="number" id="recurringInputAmount" min="0" step="10000" placeholder="Ví dụ: 500000" required></div>
+        <div class="field"><label>Ngày đến hạn hàng tháng</label><select id="recurringInputDay" required></select></div>
+      </div>
+      <div class="field">
+        <label>Trạng thái</label>
+        <div class="type-switch">
+          <button type="button" class="sel-expense" id="btnRecStatusDue" onclick="setRecurringStatus('due')"><i class="fa-solid fa-clock"></i> Sắp đến hạn</button>
+          <button type="button" class="sel-income" id="btnRecStatusPaid" onclick="setRecurringStatus('paid')"><i class="fa-solid fa-check"></i> Đã thanh toán</button>
+        </div>
+        <input type="hidden" id="recurringInputStatus" value="due">
+      </div>
+      <div class="field">
+        <label>Biểu tượng</label>
+        <div class="icon-picker" id="recurringIconPicker"></div>
+        <input type="hidden" id="recurringInputIcon" value="fa-receipt">
+      </div>
+      <div class="field" style="display:flex;align-items:center;justify-content:space-between;">
+        <label style="margin:0;">Tự động thanh toán</label>
+        <label class="switch"><input type="checkbox" id="recurringInputAuto"><span class="slider"></span></label>
+      </div>
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-check"></i> Lưu khoản định kỳ</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= ADD/EDIT DEBT MODAL (Công nợ) ================= -->
+<div class="modal-overlay hidden" id="debtModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="debtModalTitle">Thêm khoản công nợ</h3>
+      <button class="modal-close" onclick="closeDebtModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="debtForm" onsubmit="handleSaveDebt(event)">
+      <div class="type-switch">
+        <button type="button" class="sel-income" id="btnDebtTypeOwedToMe" onclick="setDebtType('owed_to_me')"><i class="fa-solid fa-arrow-down"></i> Người khác nợ tôi</button>
+        <button type="button" class="sel-expense" id="btnDebtTypeIOwe" onclick="setDebtType('i_owe')"><i class="fa-solid fa-arrow-up"></i> Tôi nợ người khác</button>
+      </div>
+      <input type="hidden" id="debtInputType" value="owed_to_me">
+
+      <div class="field">
+        <label id="debtPersonLabel">Tên người nợ tôi</label>
+        <input type="text" id="debtInputPerson" placeholder="Ví dụ: Nguyễn Văn A" required>
+      </div>
+
+      <div class="field-row">
+        <div class="field"><label>Số tiền (đ)</label><input type="number" id="debtInputAmount" min="0" step="10000" placeholder="Ví dụ: 2000000" required></div>
+        <div class="field"><label>Ngày phát sinh</label><input type="date" id="debtInputDate" required></div>
+      </div>
+
+      <div class="field">
+        <label>Hạn trả (không bắt buộc)</label>
+        <input type="date" id="debtInputDueDate">
+      </div>
+
+      <div class="field">
+        <label>Ghi chú</label>
+        <input type="text" id="debtInputNote" placeholder="Ví dụ: Cho mượn mua xe máy">
+      </div>
+
+      <div class="modal-section-title">Thông tin thanh toán (không bắt buộc)</div>
+      <div class="field">
+        <label>Ngân hàng</label>
+        <div class="bank-combo" id="debtBankCombo">
+          <input type="text" id="debtInputBankBinSearch" placeholder="Gõ để tìm ngân hàng..." autocomplete="off">
+          <input type="hidden" id="debtInputBankBin">
+          <div class="bank-combo-menu hidden" id="debtBankComboMenu"></div>
+        </div>
+      </div>
+      <div class="field hidden" id="debtBankOtherFieldWrap">
+        <label>Tên ngân hàng khác</label>
+        <input type="text" id="debtInputBankNameOther" placeholder="Ví dụ: Ngân hàng ABC">
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Ngân hàng không có trong danh sách sẽ không tạo được mã QR, chỉ hiển thị thông tin.</div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Số tài khoản</label><input type="text" id="debtInputAccountNumber" placeholder="Ví dụ: 0123456789"></div>
+        <div class="field"><label>Chủ tài khoản</label><input type="text" id="debtInputAccountHolder" placeholder="Ví dụ: NGUYEN VAN A" style="text-transform:uppercase;"></div>
+      </div>
+
+      <div class="field" id="debtWalletFieldWrap">
+        <label id="debtWalletLabel">Ghi nhận vào ví (không bắt buộc)</label>
+        <select id="debtInputWallet">
+          <option value="">-- Không ghi nhận giao dịch vào ví --</option>
+        </select>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;" id="debtWalletHint"></div>
+      </div>
+
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-check"></i> Lưu khoản công nợ</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= SETTLE DEBT MODAL (Thanh toán công nợ) ================= -->
+<div class="modal-overlay hidden" id="settleDebtModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="settleDebtModalTitle">Ghi nhận thanh toán</h3>
+      <button class="modal-close" onclick="closeSettleDebtModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="settleDebtForm" onsubmit="handleSettleDebt(event)">
+      <div class="field">
+        <label>Số tiền thanh toán (đ)</label>
+        <input type="number" id="settleInputAmount" min="0" step="10000" required>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;" id="settleRemainHint"></div>
+      </div>
+      <div class="field">
+        <label id="settleWalletLabel">Ví nhận/chi tiền (không bắt buộc)</label>
+        <select id="settleInputWallet">
+          <option value="">-- Không ghi nhận giao dịch vào ví --</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Ghi chú (không bắt buộc)</label>
+        <input type="text" id="settleInputNote" placeholder="Ví dụ: Trả đợt 2">
+      </div>
+      <div class="field">
+        <label>Ảnh minh chứng thanh toán (tối đa 5 ảnh)</label>
+        <div class="attach-drop" onclick="document.getElementById('settleAttachInput').click()">
+          <i class="fa-solid fa-camera"></i>
+          <div class="adesc" id="settleAttachDropDesc">Nhấn để chọn ảnh minh chứng thanh toán</div>
+        </div>
+        <input type="file" id="settleAttachInput" accept="image/*" multiple class="hidden" onchange="handleSettleAttachSelect(event)">
+        <div class="attach-preview-grid" id="settleAttachPreviewGrid"></div>
+      </div>
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-check"></i> Xác nhận thanh toán</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= MODAL: LỊCH SỬ TRẢ NỢ CỦA TỪNG ĐỐI TƯỢNG ================= -->
+<div class="modal-overlay hidden" id="debtHistoryModalOverlay">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3 id="debtHistoryModalTitle">Lịch sử trả nợ</h3>
+      <button class="modal-close" onclick="closeDebtHistoryModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="sub" id="debtHistoryModalSub" style="font-size:0.82rem;color:var(--text-muted);margin:-10px 0 16px;"></div>
+    <div class="debt-history-list" id="debtHistoryList"></div>
+  </div>
+</div>
+
+<!-- ================= CHI TIẾT CHI TIÊU 1 THÁNG (từ bảng Tổng kết thu chi theo tháng) ================= -->
+<div class="modal-overlay hidden" id="monthDetailModalOverlay">
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3 id="monthDetailModalTitle">Chi tiết tháng</h3>
+      <button class="modal-close" onclick="closeMonthDetailModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="month-detail-stats">
+      <div class="mds-item">
+        <div class="mds-label">Tổng thu</div>
+        <div class="mds-value" id="monthDetailIncome" style="color:var(--color-income);">0 đ</div>
+      </div>
+      <div class="mds-item">
+        <div class="mds-label">Tổng chi</div>
+        <div class="mds-value" id="monthDetailExpense" style="color:var(--color-expense);">0 đ</div>
+      </div>
+      <div class="mds-item">
+        <div class="mds-label">Chênh lệch</div>
+        <div class="mds-value" id="monthDetailNet">0 đ</div>
+      </div>
+    </div>
+
+    <div class="modal-section-title">Chi tiêu theo danh mục</div>
+    <div id="monthDetailCategoryList"></div>
+
+    <div class="modal-section-title">Giao dịch trong tháng (<span id="monthDetailTxCount">0</span>)</div>
+    <div style="overflow-x:auto;max-height:320px;overflow-y:auto;">
+      <table class="tx-table">
+        <thead><tr><th>Giao dịch</th><th>Loại</th><th>Ngày</th><th>Số tiền</th></tr></thead>
+        <tbody id="monthDetailTxBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ================= ADD/EDIT WALLET MODAL ================= -->
+<div class="modal-overlay hidden" id="walletModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="walletModalTitle">Thêm ví / nguồn tiền</h3>
+      <button class="modal-close" onclick="closeWalletModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="walletForm" onsubmit="handleSaveWallet(event)">
+      <div class="field">
+        <label>Tên ví / nguồn tiền</label>
+        <input type="text" id="walletInputName" placeholder="Ví dụ: Ví Momo" required>
+      </div>
+      <div class="field">
+        <label>Số dư hiện tại (đ)</label>
+        <input type="number" id="walletInputBalance" step="1000" placeholder="Ví dụ: 500000" required>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Bạn có thể chỉnh sửa trực tiếp số dư để đồng bộ với số dư thực tế.</div>
+      </div>
+      <div class="field">
+        <label>Biểu tượng</label>
+        <div class="icon-picker" id="walletIconPicker"></div>
+        <input type="hidden" id="walletInputIcon" value="fa-wallet">
+      </div>
+      <div class="field">
+        <label>Màu sắc</label>
+        <div class="gradient-swatches" id="walletGradientPicker"></div>
+        <input type="hidden" id="walletInputGradient" value="linear-gradient(160deg,#689D4B,#4f7c37)">
+      </div>
+
+      <div class="field" style="display:flex;align-items:center;justify-content:space-between;">
+        <label style="margin:0;">Đây là tài khoản ngân hàng (để tạo mã QR nhận tiền)</label>
+        <label class="switch"><input type="checkbox" id="walletInputIsBank" onchange="toggleWalletBankFields(this.checked)"><span class="slider"></span></label>
+      </div>
+      <div id="walletBankFieldsWrap" class="hidden">
+        <div class="field">
+          <label>Ngân hàng</label>
+          <div class="bank-combo" id="walletBankCombo">
+            <input type="text" id="walletInputBankBinSearch" placeholder="Gõ để tìm ngân hàng, hoặc để trống..." autocomplete="off">
+            <input type="hidden" id="walletInputBankBin">
+            <div class="bank-combo-menu hidden" id="walletBankComboMenu"></div>
+          </div>
+        </div>
+        <div class="field hidden" id="walletBankOtherFieldWrap">
+          <label>Tên ngân hàng khác</label>
+          <input type="text" id="walletInputBankNameOther" placeholder="Ví dụ: Ngân hàng ABC">
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;">Ngân hàng không có trong danh sách sẽ không tạo được mã QR, chỉ hiển thị thông tin.</div>
+        </div>
+        <div class="field">
+          <label>Số tài khoản</label>
+          <input type="text" id="walletInputBankAccountNumber" placeholder="Ví dụ: 0123456789" inputmode="numeric">
+        </div>
+        <div class="field">
+          <label>Chủ tài khoản</label>
+          <input type="text" id="walletInputBankAccountHolder" placeholder="Ví dụ: NGUYEN VAN A" style="text-transform:uppercase;">
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-muted);margin:-10px 0 16px;">Thông tin này chỉ dùng để tạo mã QR nhận chuyển khoản (theo chuẩn VietQR), không dùng để giao dịch tự động.</div>
+      </div>
+
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-check"></i> Lưu ví</button>
+    </form>
+  </div>
+</div>
+
+<!-- ================= MODAL: MÃ QR NHẬN CHUYỂN KHOẢN NGÂN HÀNG ================= -->
+<div class="modal-overlay hidden" id="bankQrModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Mã QR nhận chuyển khoản</h3>
+      <button class="modal-close" onclick="closeBankQrModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="sub" style="font-size:0.82rem;color:var(--text-muted);margin:-10px 0 16px;">Đưa mã này cho người chuyển tiền quét bằng app ngân hàng bất kỳ (chuẩn VietQR).</div>
+
+    <div style="text-align:center;">
+      <div style="background:#fff;border-radius:14px;padding:16px;display:inline-block;border:1px solid var(--border-soft);">
+        <img id="bankQrImage" src="" alt="Mã QR chuyển khoản" style="width:220px;height:220px;display:block;">
+      </div>
+    </div>
+
+    <div style="text-align:center;margin:14px 0 18px;">
+      <div style="font-weight:800;font-size:1rem;" id="bankQrBankName"></div>
+      <div style="color:var(--text-muted);font-size:0.88rem;" id="bankQrAccountHolder"></div>
+      <div style="font-weight:700;font-size:1.05rem;margin-top:4px;cursor:pointer;" id="bankQrAccountNumber" onclick="copyBankQrAccountNumber()" title="Nhấn để sao chép số tài khoản"><i class="fa-regular fa-copy" style="font-size:0.8em;margin-right:6px;"></i><span></span></div>
+    </div>
+
+    <div class="field">
+      <label>Số tiền (không bắt buộc)</label>
+      <input type="number" id="bankQrAmount" step="1000" placeholder="Để trống nếu người chuyển tự nhập số tiền" oninput="updateBankQrImage()">
+    </div>
+    <div class="field">
+      <label>Nội dung chuyển khoản (không bắt buộc)</label>
+      <input type="text" id="bankQrNote" placeholder="Ví dụ: Nap tien vi Momo" oninput="updateBankQrImage()">
+    </div>
+
+    <div style="display:flex;gap:10px;">
+      <a id="bankQrDownloadBtn" class="btn btn-outline" style="flex:1;text-align:center;" download="ma-qr-chuyen-khoan.png" target="_blank" rel="noopener"><i class="fa-solid fa-download"></i> Tải ảnh QR</a>
+      <button type="button" class="btn btn-primary" style="flex:1;" onclick="copyBankQrAccountNumber()"><i class="fa-solid fa-copy"></i> Sao chép STK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODAL: ẢNH MINH CHỨNG CHO GIAO DỊCH ĐÃ TẠO ================= -->
+<div class="modal-overlay hidden" id="txAttachModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Ảnh minh chứng</h3>
+      <button class="modal-close" onclick="closeTxAttachModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="sub" id="txAttachModalSub" style="font-size:0.82rem;color:var(--text-muted);margin:-10px 0 16px;"></div>
+
+    <div class="field">
+      <div class="attach-drop" onclick="document.getElementById('txAttachInput').click()">
+        <i class="fa-solid fa-camera"></i>
+        <div class="adesc" id="txAttachDropDesc">Nhấn để chọn ảnh hoá đơn / biên lai</div>
+      </div>
+      <input type="file" id="txAttachInput" accept="image/*" multiple class="hidden" onchange="handleTxAttachSelect(event)">
+      <div class="attach-preview-grid" id="txAttachPreviewGrid"></div>
+    </div>
+
+    <button type="button" class="btn btn-primary full" onclick="saveTxAttachments()"><i class="fa-solid fa-check"></i> Lưu ảnh minh chứng</button>
+  </div>
+</div>
+
+<!-- ================= MODAL: ẢNH MINH CHỨNG CHO 1 LẦN TRẢ NỢ (LỊCH SỬ CÔNG NỢ) ================= -->
+<div class="modal-overlay hidden" id="debtPaymentAttachModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Ảnh minh chứng thanh toán</h3>
+      <button class="modal-close" onclick="closeDebtPaymentAttachModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="sub" id="debtPaymentAttachModalSub" style="font-size:0.82rem;color:var(--text-muted);margin:-10px 0 16px;"></div>
+
+    <div class="field">
+      <div class="attach-drop" onclick="document.getElementById('debtPaymentAttachInput').click()">
+        <i class="fa-solid fa-camera"></i>
+        <div class="adesc" id="debtPaymentAttachDropDesc">Nhấn để chọn ảnh minh chứng thanh toán</div>
+      </div>
+      <input type="file" id="debtPaymentAttachInput" accept="image/*" multiple class="hidden" onchange="handleDebtPaymentAttachSelect(event)">
+      <div class="attach-preview-grid" id="debtPaymentAttachPreviewGrid"></div>
+    </div>
+
+    <button type="button" class="btn btn-primary full" onclick="saveDebtPaymentAttachments()"><i class="fa-solid fa-check"></i> Lưu ảnh minh chứng</button>
+  </div>
+</div>
+
+<!-- ================= LIGHTBOX: XEM ẢNH MINH CHỨNG ================= -->
+<div class="lightbox-overlay hidden" id="lightboxOverlay" onclick="handleLightboxOverlayClick(event)">
+  <div class="lightbox-img-wrap">
+    <button class="lightbox-close" onclick="closeLightbox()"><i class="fa-solid fa-xmark"></i></button>
+    <img id="lightboxImg" src="" alt="Ảnh minh chứng">
+    <div class="lightbox-nav">
+      <button onclick="lightboxPrev()"><i class="fa-solid fa-chevron-left"></i></button>
+      <span class="lightbox-count" id="lightboxCount">1 / 1</span>
+      <button onclick="lightboxNext()"><i class="fa-solid fa-chevron-right"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= EDIT PROFILE MODAL ================= -->
+<div class="modal-overlay hidden" id="profileModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Sửa thông tin cá nhân</h3>
+      <button class="modal-close" onclick="closeProfileModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="profileForm" onsubmit="handleSaveProfile(event)">
+      <div class="avatar-edit-row">
+        <div class="avatar-edit-wrap" onclick="document.getElementById('avatarFileInput').click()" title="Đổi ảnh đại diện">
+          <div class="user-avatar avatar-edit-preview" id="profileAvatarPreview">M</div>
+          <div class="avatar-edit-overlay"><i class="fa-solid fa-camera"></i></div>
+        </div>
+        <input type="file" id="avatarFileInput" accept="image/*" class="hidden" onchange="handleAvatarFileSelect(event)">
+        <button type="button" class="btn-cancel-edit hidden" id="btnRemoveAvatar" onclick="removeAvatar()">Xóa ảnh đại diện</button>
+      </div>
+      <div class="field">
+        <label>Họ và tên</label>
+        <input type="text" id="profileInputName" placeholder="Ví dụ: Trần Anh Minh" required>
+      </div>
+      <div class="field">
+        <label>Tên đăng nhập</label>
+        <input type="text" id="profileInputUsername" placeholder="Ví dụ: minh.tran" pattern="[a-z0-9.]{2,}" title="Tên đăng nhập viết thường, có thể gồm chữ cái, số và dấu chấm, tối thiểu 2 ký tự" required>
+        <div style="font-size:0.76rem;color:var(--text-muted);margin-top:5px;">Chỉ chữ thường, số và dấu chấm, không dấu cách.</div>
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="profileInputEmail" placeholder="Ví dụ: ban@email.com" required>
+      </div>
+      <button type="submit" class="btn btn-primary full"><i class="fa-solid fa-check"></i> Lưu thay đổi</button>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Thêm mật khẩu (tài khoản Google) / Đổi mật khẩu (tài khoản Email) -->
+<div class="modal-overlay hidden" id="securityModalOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="securityModalTitle">Mật khẩu</h3>
+      <button class="modal-close" onclick="closeSecurityModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="securityForm" onsubmit="handleSecuritySubmit(event)">
+      <div class="sdesc" id="securityModalHint" style="margin:-6px 0 16px;font-size:0.82rem;color:var(--text-muted);"></div>
+
+      <!-- Chỉ hiện khi ĐỔI mật khẩu (đã có mật khẩu từ trước) -->
+      <div class="field hidden" id="fieldCurrentPassword">
+        <label>Mật khẩu hiện tại</label>
+        <input type="password" id="securityCurrentPassword" placeholder="Nhập mật khẩu hiện tại" autocomplete="current-password">
+      </div>
+
+      <div class="field">
+        <label id="securityNewPasswordLabel">Mật khẩu mới</label>
+        <input type="password" id="securityNewPassword" placeholder="Tối thiểu 6 ký tự" minlength="6" autocomplete="new-password" required>
+      </div>
+
+      <div class="field">
+        <label>Xác nhận mật khẩu mới</label>
+        <input type="password" id="securityConfirmPassword" placeholder="Nhập lại mật khẩu mới" minlength="6" autocomplete="new-password" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary full" id="btnSecuritySubmit"><i class="fa-solid fa-check"></i> Lưu mật khẩu</button>
+    </form>
+  </div>
+</div>
+
+<div class="toast-stack" id="toastStack"></div>
+<script type="module" src="js/app.js?v=19"></script>
+<script>
+/* =====================================================
+   CHẶN XEM MÃ NGUỒN (dành cho người dùng phổ thông)
+   -----------------------------------------------------
+   LƯU Ý QUAN TRỌNG: đoạn này CHỈ chặn được thao tác thông
+   thường (chuột phải, phím tắt quen thuộc). Nó KHÔNG phải là
+   biện pháp bảo mật — bất kỳ ai có chút hiểu biết kỹ thuật đều
+   có thể xem được mã nguồn bằng cách khác (gõ thẳng
+   "view-source:" trước URL, tắt JavaScript, dùng công cụ ngoài
+   trình duyệt như curl...). Do đó tuyệt đối không dùng cách này
+   thay cho Firestore Security Rules để bảo vệ dữ liệu.
+===================================================== */
+(function () {
+  // Chặn menu chuột phải (Xem nguồn trang / Kiểm tra phần tử...)
+  document.addEventListener('contextmenu', function (e) {
+    e.preventDefault();
+  });
+
+  // Chặn các phím tắt hay dùng để mở DevTools / xem nguồn / lưu trang.
+  document.addEventListener('keydown', function (e) {
+    const key = (e.key || '').toUpperCase();
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
+    const blocked =
+      key === 'F12' ||                                            // Mở DevTools
+      (e.ctrlKey && !e.shiftKey && (key === 'U' || key === 'S')) || // Xem nguồn / Lưu trang (Windows/Linux)
+      (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(key)) || // DevTools tab Console/Elements (Windows/Linux)
+      (isMac && e.metaKey && e.altKey && ['I', 'J', 'C', 'U'].includes(key)); // Tương đương trên macOS
+
+    if (blocked) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  });
+})();
+</script>
+</body>
+</html>
